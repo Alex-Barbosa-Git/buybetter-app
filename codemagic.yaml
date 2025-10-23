@@ -1,0 +1,41 @@
+workflows:
+  buybetter:
+    name: BuyBetter Android & iOS
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      xcode: latest
+      groups:
+        - default
+      vars:
+        # Configure as secrets in Codemagic UI for production
+        SUPABASE_URL: "YOUR_SUPABASE_URL"
+        SUPABASE_ANON_KEY: "YOUR_SUPABASE_ANON_KEY"
+    triggering:
+      events:
+        - push
+        - pull_request
+      branch_patterns:
+        - pattern: "*"
+          include: true
+          source: true
+    scripts:
+      - name: Pre-build (create platforms if missing)
+        script: |
+          set -e
+          if [ ! -f "pubspec.yaml" ]; then
+            echo "pubspec.yaml not found. Are you in the project root?"; exit 1;
+          fi
+          if [ ! -d "android" ] || [ ! -d "ios" ]; then
+            flutter create .
+          fi
+          flutter pub get
+    android_signing:
+      use_keystore: false
+    ios_signing:
+      distribution_type: debug
+      bundle_identifier: com.buybetter.app
+    artifacts:
+      - build/**/outputs/**/*.apk
+      - build/**/outputs/**/*.aab
+      - build/ios/ipa/**/*.ipa
