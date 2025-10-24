@@ -1,151 +1,270 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
-import 'pages/compare_universal.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:math' as math;
 
-void main() {
+// Páginas
+import 'pages/compare_universal.dart';
+import 'pages/menu_qr_import.dart';
+import 'pages/map_page.dart';
+
+// Fundo com partículas
+import 'widgets/particle_background.dart';
+
+// ------------------------------------------------
+class AppConfig {
+  static Future<void> init() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    await dotenv.load(fileName: ".env");
+    final url = dotenv.env['SUPABASE_URL'];
+    final key = dotenv.env['SUPABASE_KEY'];
+    if (url == null || key == null || url.isEmpty || key.isEmpty) {
+      debugPrint("[AppConfig] ⚠️ Verifique SUPABASE_URL/SUPABASE_KEY no .env");
+    } else {
+      await Supabase.initialize(url: url, anonKey: key);
+    }
+  }
+
+  static SupabaseClient get supabase => Supabase.instance.client;
+}
+
+Future<void> main() async {
+  await AppConfig.init();
   runApp(const BuyBetterApp());
 }
 
+// ------------------------------------------------
 class BuyBetterApp extends StatelessWidget {
   const BuyBetterApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final theme = ThemeData(
-      useMaterial3: true,
-      colorSchemeSeed: const Color(0xFF0A84FF), // azul
-      scaffoldBackgroundColor: Colors.white,
-      textTheme: const TextTheme(
-        titleLarge: TextStyle(fontWeight: FontWeight.w700),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
-          elevation: 2,
-        ),
-      ),
-      cardTheme: CardTheme(
-        elevation: 1.5,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
-    );
-
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'BuyBetter',
-      theme: theme,
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blueAccent,
+          brightness: Brightness.light,
+        ),
+        textTheme: const TextTheme(
+          headlineSmall: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+          bodyMedium: TextStyle(
+            color: Colors.white70,
+            height: 1.4,
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            elevation: 8,
+            backgroundColor: Colors.blueAccent,
+            foregroundColor: Colors.white,
+            shadowColor: Colors.blueAccent.withOpacity(0.4), // ✅ corrigido
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 22),
+            textStyle: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ),
+      ),
       home: const HomeScreen(),
       routes: {
         '/compare': (_) => const CompareUniversalPage(),
-        // '/scan': (_) => const ScanPage(), // (próxima etapa)
-        // '/map':  (_) => const MapPage(),  // (próxima etapa)
+        '/scan': (_) => MenuQrImportPage(),
+        '/map': (_) => const MapPage(),
       },
     );
   }
 }
 
-class HomeScreen extends StatelessWidget {
+// ------------------------------------------------
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 8),
-            const Text('BuyBetter', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 4),
-            Text('Comparador inteligente e colaborativo',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black54),
-            ),
-            const SizedBox(height: 24),
-
-            // Botões grandes
-            _BigActionButton(
-              icon: Icons.balance_rounded,
-              title: 'Comparar Itens',
-              subtitle: 'Preço por unidade (ml, L, g, kg, un, m...)',
-              onTap: () => Navigator.pushNamed(context, '/compare'),
-            ),
-            const SizedBox(height: 16),
-
-            _BigActionButton(
-              icon: Icons.camera_alt_rounded,
-              title: 'Usar Câmera (QR/Produto)',
-              subtitle: 'Leia QR/Código de barras ou foto do rótulo',
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Scanner virá na próxima etapa 👍')),
-                );
-                // Navigator.pushNamed(context, '/scan');
-              },
-            ),
-
-            const Spacer(),
-
-            // Rodapé
-            Center(
-              child: Text(
-                'v1 • layout base • vamos evoluir o design',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black45),
+    return Scaffold(
+      // AppBar transparente com ícone do mapa
+      appBar: AppBar(
+        title: const Text('BuyBetter'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            tooltip: 'Mapa',
+            icon: const Icon(Icons.map_rounded),
+            onPressed: () => Navigator.pushNamed(context, '/map'),
+          ),
+        ],
+      ),
+      extendBodyBehindAppBar: true,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // 1) Degradê animado
+          AnimatedBuilder(
+            animation: _ctl,
+            builder: (_, __) {
+              return Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color.lerp(
+                        Colors.blue.shade900,
+                        Colors.deepPurple.shade700,
+                        math.sin(_ctl.value * math.pi),
+                      )!,
+                      Color.lerp(
+                        Colors.blue.shade500,
+                        Colors.purpleAccent.shade200,
+                        math.cos(_ctl.value * math.pi),
+                      )!,
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          // 2) Partículas animadas
+          const ParticleBackground(
+            count: 70,
+            maxSize: 3.6,
+            speed: 0.28,
+          ),
+          // 3) Conteúdo central
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 100, 24, 24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Ícone do app (efeito glass)
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.28),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.22),
+                            blurRadius: 20,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.layers_rounded,
+                        size: 54,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    Text(
+                      'Bem-vindo ao BuyBetter',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Compare qualquer produto por unidade, capture via QR e visualize preços no mapa colaborativo.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 36),
+                    _MenuButton(
+                      icon: Icons.calculate_rounded,
+                      label: 'Comparar por unidade',
+                      onTap: () => Navigator.pushNamed(context, '/compare'),
+                    ),
+                    const SizedBox(height: 14),
+                    _MenuButton(
+                      icon: Icons.qr_code_scanner_rounded,
+                      label: 'Usar câmera / QR (beta)',
+                      onTap: () => Navigator.pushNamed(context, '/scan'),
+                    ),
+                    const SizedBox(height: 36),
+                    Text(
+                      'v1.0.0 • Flutter • Supabase',
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelMedium
+                          ?.copyWith(color: Colors.white54),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _BigActionButton extends StatelessWidget {
+// ------------------------------------------------
+class _MenuButton extends StatelessWidget {
   final IconData icon;
-  final String title;
-  final String subtitle;
+  final String label;
   final VoidCallback onTap;
 
-  const _BigActionButton({
+  const _MenuButton({
     required this.icon,
-    required this.title,
-    required this.subtitle,
+    required this.label,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Row(
-            children: [
-              Container(
-                width: 56, height: 56,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  color: Theme.of(context).colorScheme.primary.withOpacity(.12),
-                ),
-                child: Icon(icon, size: 28, color: Theme.of(context).colorScheme.primary),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 2),
-                    Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54)),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right_rounded),
-            ],
-          ),
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 22),
+        label: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Text(label),
         ),
       ),
     );
